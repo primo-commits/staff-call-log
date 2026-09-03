@@ -8,6 +8,7 @@
   var STATUSES = [
     { key: 'reached', label: 'Reached' },
     { key: 'appointment', label: 'Appointment Booked' },
+    { key: 'signed', label: 'Signed' },
     { key: 'referral', label: 'Referral Sent' },
     { key: 'voicemail', label: 'Voicemail' },
     { key: 'no-answer', label: 'No Answer' },
@@ -20,12 +21,13 @@
 
   var contacts = [];
   var notesSaveTimers = {};
+  var sheetContactId = null;
+  var searchDebounceTimer = null;
 
   // ---------- Elements ----------
   var els = {
     importBtn: document.getElementById('importBtn'),
     emptyImportBtn: document.getElementById('emptyImportBtn'),
-    exportBtn: document.getElementById('exportBtn'),
     fileInput: document.getElementById('csvFileInput'),
     emptyState: document.getElementById('emptyState'),
     listContainer: document.getElementById('listContainer'),
@@ -33,15 +35,27 @@
     searchInput: document.getElementById('searchInput'),
     statusFilter: document.getElementById('statusFilter'),
     stateFilter: document.getElementById('stateFilter'),
-    progressFill: document.getElementById('progressFill'),
-    progressText: document.getElementById('progressText'),
+    categoryFilter: document.getElementById('categoryFilter'),
     noResults: document.getElementById('noResults'),
     clearListBtn: document.getElementById('clearListBtn'),
     toast: document.getElementById('toast'),
     installBanner: document.getElementById('installBanner'),
     installBannerText: document.getElementById('installBannerText'),
     installBannerBtn: document.getElementById('installBannerBtn'),
-    installBannerClose: document.getElementById('installBannerClose')
+    installBannerClose: document.getElementById('installBannerClose'),
+    dashboard: document.getElementById('dashboard'),
+    dashboardSubtitle: document.getElementById('dashboardSubtitle'),
+    backupBtn: document.getElementById('backupBtn'),
+    statToCall: document.getElementById('statToCall'),
+    statCalled: document.getElementById('statCalled'),
+    statAppts: document.getElementById('statAppts'),
+    statSigned: document.getElementById('statSigned'),
+    logCallOverlay: document.getElementById('logCallOverlay'),
+    sheetName: document.getElementById('sheetName'),
+    sheetPhone: document.getElementById('sheetPhone'),
+    sheetClose: document.getElementById('sheetClose'),
+    sheetChips: document.getElementById('sheetChips'),
+    sheetNotes: document.getElementById('sheetNotes')
   };
 
   // ---------- Storage ----------
@@ -162,10 +176,31 @@
     return '';
   }
 
+  function parseAddress(address) {
+    var result = { city: '', state: '' };
+    if (!address) return result;
+    var parts = address.split(',').map(function (p) { return p.trim(); }).filter(Boolean);
+    if (!parts.length) return result;
+    var last = parts[parts.length - 1];
+    var m = last.match(/^([A-Za-z]{2})(?:\s+\d{5}(?:-\d{4})?)?$/);
+    if (m && US_STATE_ABBR[m[1].toUpperCase()]) {
+      result.state = m[1].toUpperCase();
+      if (parts.length >= 2) result.city = parts[parts.length - 2];
+      return result;
+    }
+    var fallbackState = extractStateFromAddress(address);
+    if (fallbackState) {
+      result.state = fallbackState;
+      if (parts.length >= 2) result.city = parts[parts.length - 2];
+    }
+    return result;
+  }
+
   function buildContactsFromRows(rows) {
     if (!rows.length) return [];
     var startIdx = 0;
-    var nameIdx = 0, phoneIdx = 1, statusIdx = -1, notesIdx = -1, stateIdx = -1, addressIdx = -1;
+    var nameIdx = 0, phoneIdx = 1, statusIdx = -1, notesIdx = -1;
+    var stateIdx = -1, cityIdx = -1, addressIdx = -1, categoryIdx = -1;
 
     var header = rows[0].map(function (h) { return String(h).trim().toLowerCase(); });
     var looksLikeHeader = header.some(function (h) {
@@ -179,7 +214,9 @@
       statusIdx = findColumnIndex(header, ['status', 'outcome', 'result']);
       notesIdx = findColumnIndex(header, ['note']);
       stateIdx = findStateColumnIndex(header);
+      cityIdx = findColumnIndex(header, ['city', 'town']);
       addressIdx = findColumnIndex(header, ['address', 'location']);
+      categoryIdx = findColumnIndex(header, ['category', 'industry', 'type']);
       if (ni !== -1) nameIdx = ni;
       if (pi !== -1) phoneIdx = pi;
     }
@@ -193,15 +230,21 @@
       if (!name && !phone) continue;
       var status = statusIdx !== -1 ? normalizeStatus(r[statusIdx]) : '';
       var notes = notesIdx !== -1 ? (r[notesIdx] || '').trim() : '';
+      var category = categoryIdx !== -1 ? (r[categoryIdx] || '').trim() : '';
       var state = stateIdx !== -1 ? (r[stateIdx] || '').trim() : '';
-      if (!state && addressIdx !== -1) {
-        state = extractStateFromAddress((r[addressIdx] || '').trim());
+      var city = cityIdx !== -1 ? (r[cityIdx] || '').trim() : '';
+      if ((!state || !city) && addressIdx !== -1) {
+        var parsed = parseAddress((r[addressIdx] || '').trim());
+        if (!state) state = parsed.state;
+        if (!city) city = parsed.city;
       }
       out.push({
         id: makeId(),
         name: name || '(no name)',
         phone: phone,
+        city: city,
         state: state,
+        category: category,
         status: status,
         notes: notes,
         calledAt: status ? new Date().toISOString() : null
@@ -219,24 +262,75 @@
     return 'tel:' + cleaned;
   }
 
+  // ---------- Clipboard ----------
+  function copyToClipboard(text) {
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        showToast('Copied ' + text);
+      }).catch(function () {
+        legacyCopy(text);
+      });
+    } else {
+      legacyCopy(text);
+    }
+  }
+
+  function legacyCopy(text) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('Copied ' + text);
+    } catch (e) {
+      showToast('Could not copy number.');
+    }
+  }
+
+  // ---------- Dashboard ----------
+  function updateDashboard() {
+    var hasContacts = contacts.length > 0;
+    els.dashboard.hidden = !hasContacts;
+    if (!hasContacts) return;
+    var calledCount = 0, apptsCount = 0, signedCount = 0;
+    contacts.forEach(function (c) {
+      if (c.status) calledCount++;
+      if (c.status === 'appointment') apptsCount++;
+      if (c.status === 'signed') signedCount++;
+    });
+    els.statToCall.textContent = (contacts.length - calledCount).toLocaleString();
+    els.statCalled.textContent = calledCount.toLocaleString();
+    els.statAppts.textContent = apptsCount.toLocaleString();
+    els.statSigned.textContent = signedCount.toLocaleString();
+    els.dashboardSubtitle.textContent = contacts.length.toLocaleString() + ' contact' + (contacts.length === 1 ? '' : 's') + ' · tap a card to log a call';
+  }
+
   // ---------- Rendering ----------
   function render() {
     var hasContacts = contacts.length > 0;
     els.emptyState.hidden = hasContacts;
     els.listContainer.hidden = !hasContacts;
-    els.exportBtn.disabled = !hasContacts;
+    updateDashboard();
     if (!hasContacts) return;
 
     var query = els.searchInput.value.trim().toLowerCase();
-    var filter = els.statusFilter.value;
+    var statusFilterVal = els.statusFilter.value;
     var stateFilterVal = els.stateFilter.hidden ? 'all' : els.stateFilter.value;
+    var categoryFilterVal = els.categoryFilter.hidden ? 'all' : els.categoryFilter.value;
 
     var visible = contacts.filter(function (c) {
-      if (filter === 'pending' && c.status) return false;
-      if (filter !== 'all' && filter !== 'pending' && c.status !== filter) return false;
+      if (statusFilterVal === 'pending' && c.status) return false;
+      if (statusFilterVal !== 'all' && statusFilterVal !== 'pending' && c.status !== statusFilterVal) return false;
       if (stateFilterVal !== 'all' && (c.state || '').trim().toUpperCase() !== stateFilterVal) return false;
+      if (categoryFilterVal !== 'all' && (c.category || '').trim().toUpperCase() !== categoryFilterVal) return false;
       if (query) {
-        var hay = (c.name + ' ' + c.phone).toLowerCase();
+        var hay = (c.name + ' ' + c.phone + ' ' + (c.city || '')).toLowerCase();
         if (hay.indexOf(query) === -1) return false;
       }
       return true;
@@ -260,11 +354,6 @@
       });
     }
     els.contactList.appendChild(frag);
-
-    var calledCount = contacts.filter(function (c) { return c.status; }).length;
-    var pct = contacts.length ? Math.round((calledCount / contacts.length) * 100) : 0;
-    els.progressFill.style.width = pct + '%';
-    els.progressText.textContent = calledCount + ' of ' + contacts.length + ' called';
   }
 
   function groupByState(list) {
@@ -282,37 +371,48 @@
     return withState.concat(noState).map(function (k) { return map[k]; });
   }
 
-  function getDistinctStates() {
+  function getDistinctValues(field) {
     var map = {};
     contacts.forEach(function (c) {
-      if (!c.state) return;
-      var key = c.state.trim().toUpperCase();
-      if (!map[key]) map[key] = c.state.trim();
+      var raw = c[field];
+      if (!raw) return;
+      var key = raw.trim().toUpperCase();
+      if (!map[key]) map[key] = raw.trim();
     });
     return Object.keys(map).sort().map(function (key) { return { value: key, label: map[key] }; });
   }
 
-  function refreshStateFilterOptions() {
-    var states = getDistinctStates();
-    if (!states.length) {
-      els.stateFilter.hidden = true;
+  function refreshFilterOptions(selectEl, field, allLabel) {
+    var values = getDistinctValues(field);
+    if (!values.length) {
+      selectEl.hidden = true;
       return;
     }
-    var prevValue = els.stateFilter.value;
-    els.stateFilter.innerHTML = '';
+    var prevValue = selectEl.value;
+    selectEl.innerHTML = '';
     var optAll = document.createElement('option');
     optAll.value = 'all';
-    optAll.textContent = 'All States';
-    els.stateFilter.appendChild(optAll);
-    states.forEach(function (s) {
+    optAll.textContent = allLabel;
+    selectEl.appendChild(optAll);
+    values.forEach(function (v) {
       var opt = document.createElement('option');
-      opt.value = s.value;
-      opt.textContent = s.label;
-      els.stateFilter.appendChild(opt);
+      opt.value = v.value;
+      opt.textContent = v.label;
+      selectEl.appendChild(opt);
     });
-    var stillValid = Array.prototype.some.call(els.stateFilter.options, function (o) { return o.value === prevValue; });
-    els.stateFilter.value = stillValid ? prevValue : 'all';
-    els.stateFilter.hidden = false;
+    var stillValid = Array.prototype.some.call(selectEl.options, function (o) { return o.value === prevValue; });
+    selectEl.value = stillValid ? prevValue : 'all';
+    selectEl.hidden = false;
+  }
+
+  function refreshAllFilterOptions() {
+    refreshFilterOptions(els.stateFilter, 'state', 'All states');
+    refreshFilterOptions(els.categoryFilter, 'category', 'All categories');
+  }
+
+  function locationText(c) {
+    if (c.city && c.state) return c.city + ', ' + c.state;
+    return c.city || c.state || '';
   }
 
   function renderContact(c) {
@@ -327,67 +427,62 @@
     var name = document.createElement('div');
     name.className = 'contact-name';
     name.textContent = c.name;
-    if (c.state) {
-      var stateBadge = document.createElement('span');
-      stateBadge.className = 'contact-state';
-      stateBadge.textContent = c.state;
-      name.appendChild(stateBadge);
-    }
     main.appendChild(name);
+
+    var pill = document.createElement('span');
+    pill.className = 'status-pill';
+    if (c.status) pill.dataset.status = c.status;
+    pill.textContent = c.status ? STATUS_LABEL[c.status] : 'Not Called';
+    main.appendChild(pill);
+    li.appendChild(main);
+
+    var loc = locationText(c);
+    if (loc) {
+      var location = document.createElement('div');
+      location.className = 'contact-location';
+      location.textContent = loc;
+      li.appendChild(location);
+    }
 
     if (c.phone) {
       var phoneLink = document.createElement('a');
       phoneLink.className = 'contact-phone';
       phoneLink.href = telHref(c.phone);
       phoneLink.textContent = c.phone;
-      main.appendChild(phoneLink);
+      li.appendChild(phoneLink);
     }
-    li.appendChild(main);
 
-    var chips = document.createElement('div');
-    chips.className = 'status-chips';
-    STATUSES.forEach(function (s) {
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'status-chip' + (c.status === s.key ? ' active' : '');
-      btn.dataset.status = s.key;
-      btn.textContent = s.label;
-      btn.addEventListener('click', function () { setStatus(c.id, s.key); });
-      chips.appendChild(btn);
-    });
-    li.appendChild(chips);
+    if (c.category) {
+      var category = document.createElement('div');
+      category.className = 'contact-category';
+      category.textContent = c.category;
+      li.appendChild(category);
+    }
 
-    var footer = document.createElement('div');
-    footer.className = 'contact-footer';
-
-    var notesToggle = document.createElement('button');
-    notesToggle.type = 'button';
-    notesToggle.className = 'notes-toggle';
-    notesToggle.textContent = c.notes ? 'Edit note' : '+ Add note';
-    footer.appendChild(notesToggle);
+    var actions = document.createElement('div');
+    actions.className = 'contact-actions';
+    if (c.phone) {
+      var copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.className = 'copy-btn';
+      copyBtn.dataset.action = 'copy';
+      copyBtn.textContent = 'Copy number';
+      actions.appendChild(copyBtn);
+    }
+    var logBtn = document.createElement('button');
+    logBtn.type = 'button';
+    logBtn.className = 'log-call-btn';
+    logBtn.dataset.action = 'log';
+    logBtn.textContent = 'Log call';
+    actions.appendChild(logBtn);
+    li.appendChild(actions);
 
     if (c.calledAt) {
       var when = document.createElement('span');
       when.className = 'called-at';
-      when.textContent = formatTime(c.calledAt);
-      footer.appendChild(when);
+      when.textContent = 'Last logged ' + formatTime(c.calledAt);
+      li.appendChild(when);
     }
-    li.appendChild(footer);
-
-    var notesInput = document.createElement('textarea');
-    notesInput.className = 'notes-input';
-    notesInput.placeholder = 'Notes (optional)';
-    notesInput.value = c.notes || '';
-    notesInput.hidden = !c.notes;
-    notesInput.addEventListener('input', function () {
-      scheduleNotesSave(c.id, notesInput.value);
-    });
-    li.appendChild(notesInput);
-
-    notesToggle.addEventListener('click', function () {
-      notesInput.hidden = !notesInput.hidden;
-      if (!notesInput.hidden) notesInput.focus();
-    });
 
     return li;
   }
@@ -400,6 +495,51 @@
       return '';
     }
   }
+
+  // ---------- Log-call sheet ----------
+  function openLogCallSheet(id) {
+    var c = contacts.find(function (x) { return x.id === id; });
+    if (!c) return;
+    sheetContactId = id;
+    els.sheetName.textContent = c.name;
+    if (c.phone) {
+      els.sheetPhone.textContent = c.phone;
+      els.sheetPhone.href = telHref(c.phone);
+      els.sheetPhone.hidden = false;
+    } else {
+      els.sheetPhone.hidden = true;
+    }
+
+    els.sheetChips.innerHTML = '';
+    STATUSES.forEach(function (s) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'status-chip' + (c.status === s.key ? ' active' : '');
+      btn.dataset.status = s.key;
+      btn.textContent = s.label;
+      btn.addEventListener('click', function () {
+        setStatus(id, s.key);
+        closeSheet();
+      });
+      els.sheetChips.appendChild(btn);
+    });
+
+    els.sheetNotes.value = c.notes || '';
+    els.logCallOverlay.hidden = false;
+  }
+
+  function closeSheet() {
+    els.logCallOverlay.hidden = true;
+    sheetContactId = null;
+  }
+
+  els.sheetClose.addEventListener('click', closeSheet);
+  els.logCallOverlay.addEventListener('click', function (e) {
+    if (e.target === els.logCallOverlay) closeSheet();
+  });
+  els.sheetNotes.addEventListener('input', function () {
+    if (sheetContactId) scheduleNotesSave(sheetContactId, els.sheetNotes.value);
+  });
 
   // ---------- Mutations ----------
   function setStatus(id, statusKey) {
@@ -442,7 +582,7 @@
       saveMeta({ importedAt: new Date().toISOString(), fileName: file.name, count: imported.length });
       els.searchInput.value = '';
       els.statusFilter.value = 'all';
-      refreshStateFilterOptions();
+      refreshAllFilterOptions();
       render();
       showToast('Imported ' + imported.length + ' contact' + (imported.length === 1 ? '' : 's') + '.');
     };
@@ -455,13 +595,15 @@
   // ---------- Export ----------
   function exportCSV() {
     if (!contacts.length) return;
-    var header = ['Name', 'Phone', 'State', 'Status', 'Notes', 'Called At'];
+    var header = ['Name', 'Phone', 'City', 'State', 'Category', 'Status', 'Notes', 'Called At'];
     var lines = [header.map(csvField).join(',')];
     contacts.forEach(function (c) {
       lines.push([
         csvField(c.name),
         csvField(c.phone),
+        csvField(c.city || ''),
         csvField(c.state || ''),
+        csvField(c.category || ''),
         csvField(STATUS_LABEL[c.status] || ''),
         csvField(c.notes || ''),
         csvField(c.calledAt || '')
@@ -541,17 +683,36 @@
     handleFile(file);
     els.fileInput.value = '';
   });
-  els.exportBtn.addEventListener('click', exportCSV);
-  els.searchInput.addEventListener('input', render);
+  els.backupBtn.addEventListener('click', exportCSV);
+  els.searchInput.addEventListener('input', function () {
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(render, 150);
+  });
   els.statusFilter.addEventListener('change', render);
   els.stateFilter.addEventListener('change', render);
+  els.categoryFilter.addEventListener('change', render);
+
+  els.contactList.addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    var li = btn.closest('.contact');
+    if (!li) return;
+    var id = li.dataset.id;
+    if (btn.dataset.action === 'copy') {
+      var c = contacts.find(function (x) { return x.id === id; });
+      if (c) copyToClipboard(c.phone);
+    } else if (btn.dataset.action === 'log') {
+      openLogCallSheet(id);
+    }
+  });
+
   els.clearListBtn.addEventListener('click', function () {
     var ok = window.confirm('Clear the entire list from this device? This cannot be undone (export first if you need a copy).');
     if (!ok) return;
     contacts = [];
     saveContacts();
     saveMeta(null);
-    refreshStateFilterOptions();
+    refreshAllFilterOptions();
     render();
     showToast('List cleared.');
   });
@@ -565,7 +726,7 @@
 
   // ---------- Init ----------
   loadContacts();
-  refreshStateFilterOptions();
+  refreshAllFilterOptions();
   render();
   setupInstallBanner();
 })();

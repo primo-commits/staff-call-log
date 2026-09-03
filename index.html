@@ -23,11 +23,24 @@
     <button id="importBtn" class="icon-btn" type="button" aria-label="Import CSV" title="Import CSV">
       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 3a1 1 0 0 1 1 1v9.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1zM5 19a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z"/></svg>
     </button>
-    <button id="exportBtn" class="icon-btn" type="button" aria-label="Export CSV" title="Export CSV" disabled>
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 15a1 1 0 0 1-1-1V4.41L8.7 6.7a1 1 0 1 1-1.4-1.42l4-4a1 1 0 0 1 1.4 0l4 4a1 1 0 1 1-1.4 1.42L13 4.41V14a1 1 0 0 1-1 1zM5 19a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z"/></svg>
-    </button>
   </div>
 </header>
+
+<div id="dashboard" class="dashboard" hidden>
+  <div class="dashboard-top">
+    <p id="dashboardSubtitle" class="dashboard-subtitle"></p>
+    <button id="backupBtn" class="backup-btn" type="button">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 15a1 1 0 0 1-1-1V4.41L8.7 6.7a1 1 0 1 1-1.4-1.42l4-4a1 1 0 0 1 1.4 0l4 4a1 1 0 1 1-1.4 1.42L13 4.41V14a1 1 0 0 1-1 1zM5 19a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z"/></svg>
+      Backup
+    </button>
+  </div>
+  <div class="stat-tiles">
+    <div class="stat-tile"><span id="statToCall" class="stat-number">0</span><span class="stat-label">To Call</span></div>
+    <div class="stat-tile"><span id="statCalled" class="stat-number">0</span><span class="stat-label">Called</span></div>
+    <div class="stat-tile"><span id="statAppts" class="stat-number">0</span><span class="stat-label">Appts</span></div>
+    <div class="stat-tile"><span id="statSigned" class="stat-number">0</span><span class="stat-label">Signed</span></div>
+  </div>
+</div>
 
 <input type="file" id="csvFileInput" accept=".csv,text/csv" hidden>
 
@@ -48,12 +61,13 @@
 
 <div id="listContainer" class="list-container" hidden>
   <div class="toolbar">
-    <input type="search" id="searchInput" placeholder="Search name or phone" aria-label="Search contacts">
+    <input type="search" id="searchInput" placeholder="Search name, city, or phone" aria-label="Search contacts">
     <select id="statusFilter" aria-label="Filter by status">
-      <option value="all">All</option>
+      <option value="all">All statuses</option>
       <option value="pending">Not yet called</option>
       <option value="reached">Reached</option>
       <option value="appointment">Appointment Booked</option>
+      <option value="signed">Signed</option>
       <option value="referral">Referral Sent</option>
       <option value="voicemail">Voicemail</option>
       <option value="no-answer">No Answer</option>
@@ -61,16 +75,32 @@
       <option value="callback">Call Back Later</option>
     </select>
     <select id="stateFilter" aria-label="Filter by state" hidden>
-      <option value="all">All States</option>
+      <option value="all">All states</option>
     </select>
-  </div>
-  <div class="progress-bar-wrap">
-    <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
-    <span id="progressText" class="progress-text"></span>
+    <select id="categoryFilter" aria-label="Filter by category" hidden>
+      <option value="all">All categories</option>
+    </select>
   </div>
   <ul id="contactList" class="contact-list"></ul>
   <p id="noResults" class="no-results" hidden>No contacts match.</p>
   <button id="clearListBtn" class="text-btn danger" type="button">Clear list &amp; start over</button>
+</div>
+
+<div id="logCallOverlay" class="sheet-overlay" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetName">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="sheet-header">
+      <div>
+        <div id="sheetName" class="sheet-name"></div>
+        <a id="sheetPhone" class="sheet-phone" href="#"></a>
+      </div>
+      <button id="sheetClose" class="icon-btn" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg>
+      </button>
+    </div>
+    <div id="sheetChips" class="status-chips sheet-chips"></div>
+    <textarea id="sheetNotes" class="notes-input sheet-notes" placeholder="Notes (optional)"></textarea>
+  </div>
 </div>
 
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
