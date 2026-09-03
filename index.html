@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Staff Call Log</title>
+<meta name="description" content="Import a call list, log outcomes as you dial, export results.">
+<meta name="theme-color" content="#115e59">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-512.png" sizes="512x512" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Call Log">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar safe-top">
+  <h1>Call Log</h1>
+  <div class="topbar-actions">
+    <button id="importBtn" class="icon-btn" type="button" aria-label="Import CSV" title="Import CSV">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 3a1 1 0 0 1 1 1v9.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1zM5 19a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z"/></svg>
+    </button>
+    <button id="exportBtn" class="icon-btn" type="button" aria-label="Export CSV" title="Export CSV" disabled>
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 15a1 1 0 0 1-1-1V4.41L8.7 6.7a1 1 0 1 1-1.4-1.42l4-4a1 1 0 0 1 1.4 0l4 4a1 1 0 1 1-1.4 1.42L13 4.41V14a1 1 0 0 1-1 1zM5 19a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z"/></svg>
+    </button>
+  </div>
+</header>
+
+<input type="file" id="csvFileInput" accept=".csv,text/csv" hidden>
+
+<div id="installBanner" class="install-banner" hidden>
+  <span id="installBannerText"></span>
+  <button id="installBannerBtn" type="button">Install</button>
+  <button id="installBannerClose" class="install-banner-close" type="button" aria-label="Dismiss">&times;</button>
+</div>
+
+<main id="emptyState" class="empty-state">
+  <div class="empty-icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="48" height="48"><path fill="currentColor" d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.02-.24c1.12.37 2.33.57 3.57.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.61 21 3 13.39 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.24.2 2.45.57 3.57a1 1 0 0 1-.25 1.02l-2.2 2.2z"/></svg>
+  </div>
+  <h2>Import your call list</h2>
+  <p>Pick a CSV file with a name column and a phone number column. Your data stays on this device — nothing is uploaded.</p>
+  <button id="emptyImportBtn" class="primary-btn" type="button">Choose CSV file</button>
+</main>
+
+<div id="listContainer" class="list-container" hidden>
+  <div class="toolbar">
+    <input type="search" id="searchInput" placeholder="Search name or phone" aria-label="Search contacts">
+    <select id="statusFilter" aria-label="Filter by status">
+      <option value="all">All</option>
+      <option value="pending">Not yet called</option>
+      <option value="reached">Reached</option>
+      <option value="voicemail">Voicemail</option>
+      <option value="no-answer">No Answer</option>
+      <option value="wrong-number">Wrong Number</option>
+      <option value="callback">Call Back Later</option>
+    </select>
+  </div>
+  <div class="progress-bar-wrap">
+    <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+    <span id="progressText" class="progress-text"></span>
+  </div>
+  <ul id="contactList" class="contact-list"></ul>
+  <p id="noResults" class="no-results" hidden>No contacts match.</p>
+  <button id="clearListBtn" class="text-btn danger" type="button">Clear list &amp; start over</button>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>
