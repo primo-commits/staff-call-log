@@ -7,6 +7,8 @@
 
   var STATUSES = [
     { key: 'reached', label: 'Reached' },
+    { key: 'appointment', label: 'Appointment Booked' },
+    { key: 'referral', label: 'Referral Sent' },
     { key: 'voicemail', label: 'Voicemail' },
     { key: 'no-answer', label: 'No Answer' },
     { key: 'wrong-number', label: 'Wrong Number' },
@@ -30,6 +32,7 @@
     contactList: document.getElementById('contactList'),
     searchInput: document.getElementById('searchInput'),
     statusFilter: document.getElementById('statusFilter'),
+    stateFilter: document.getElementById('stateFilter'),
     progressFill: document.getElementById('progressFill'),
     progressText: document.getElementById('progressText'),
     noResults: document.getElementById('noResults'),
@@ -132,10 +135,19 @@
     return -1;
   }
 
+  function findStateColumnIndex(header) {
+    var idx = findColumnIndex(header, ['state', 'province']);
+    if (idx !== -1) return idx;
+    for (var i = 0; i < header.length; i++) {
+      if (header[i] === 'st') return i;
+    }
+    return -1;
+  }
+
   function buildContactsFromRows(rows) {
     if (!rows.length) return [];
     var startIdx = 0;
-    var nameIdx = 0, phoneIdx = 1, statusIdx = -1, notesIdx = -1;
+    var nameIdx = 0, phoneIdx = 1, statusIdx = -1, notesIdx = -1, stateIdx = -1;
 
     var header = rows[0].map(function (h) { return String(h).trim().toLowerCase(); });
     var looksLikeHeader = header.some(function (h) {
@@ -148,6 +160,7 @@
       var pi = findColumnIndex(header, ['phone', 'mobile', 'cell', 'number', 'tel']);
       statusIdx = findColumnIndex(header, ['status', 'outcome', 'result']);
       notesIdx = findColumnIndex(header, ['note']);
+      stateIdx = findStateColumnIndex(header);
       if (ni !== -1) nameIdx = ni;
       if (pi !== -1) phoneIdx = pi;
     }
@@ -161,10 +174,12 @@
       if (!name && !phone) continue;
       var status = statusIdx !== -1 ? normalizeStatus(r[statusIdx]) : '';
       var notes = notesIdx !== -1 ? (r[notesIdx] || '').trim() : '';
+      var state = stateIdx !== -1 ? (r[stateIdx] || '').trim() : '';
       out.push({
         id: makeId(),
         name: name || '(no name)',
         phone: phone,
+        state: state,
         status: status,
         notes: notes,
         calledAt: status ? new Date().toISOString() : null
@@ -192,10 +207,12 @@
 
     var query = els.searchInput.value.trim().toLowerCase();
     var filter = els.statusFilter.value;
+    var stateFilterVal = els.stateFilter.hidden ? 'all' : els.stateFilter.value;
 
     var visible = contacts.filter(function (c) {
       if (filter === 'pending' && c.status) return false;
       if (filter !== 'all' && filter !== 'pending' && c.status !== filter) return false;
+      if (stateFilterVal !== 'all' && (c.state || '').trim().toUpperCase() !== stateFilterVal) return false;
       if (query) {
         var hay = (c.name + ' ' + c.phone).toLowerCase();
         if (hay.indexOf(query) === -1) return false;
@@ -207,15 +224,73 @@
     els.noResults.hidden = visible.length !== 0;
 
     var frag = document.createDocumentFragment();
-    visible.forEach(function (c) {
-      frag.appendChild(renderContact(c));
-    });
+    if (stateFilterVal === 'all' && visible.some(function (c) { return c.state; })) {
+      groupByState(visible).forEach(function (group) {
+        var header = document.createElement('li');
+        header.className = 'state-group-header';
+        header.textContent = group.label + ' (' + group.items.length + ')';
+        frag.appendChild(header);
+        group.items.forEach(function (c) { frag.appendChild(renderContact(c)); });
+      });
+    } else {
+      visible.forEach(function (c) {
+        frag.appendChild(renderContact(c));
+      });
+    }
     els.contactList.appendChild(frag);
 
     var calledCount = contacts.filter(function (c) { return c.status; }).length;
     var pct = contacts.length ? Math.round((calledCount / contacts.length) * 100) : 0;
     els.progressFill.style.width = pct + '%';
     els.progressText.textContent = calledCount + ' of ' + contacts.length + ' called';
+  }
+
+  function groupByState(list) {
+    var map = {};
+    var NO_STATE_KEY = '\uFFFF';
+    list.forEach(function (c) {
+      var key = c.state ? c.state.trim().toUpperCase() : NO_STATE_KEY;
+      var label = c.state ? c.state.trim() : 'No State';
+      if (!map[key]) map[key] = { label: label, items: [] };
+      map[key].items.push(c);
+    });
+    var keys = Object.keys(map);
+    var withState = keys.filter(function (k) { return k !== NO_STATE_KEY; }).sort();
+    var noState = keys.filter(function (k) { return k === NO_STATE_KEY; });
+    return withState.concat(noState).map(function (k) { return map[k]; });
+  }
+
+  function getDistinctStates() {
+    var map = {};
+    contacts.forEach(function (c) {
+      if (!c.state) return;
+      var key = c.state.trim().toUpperCase();
+      if (!map[key]) map[key] = c.state.trim();
+    });
+    return Object.keys(map).sort().map(function (key) { return { value: key, label: map[key] }; });
+  }
+
+  function refreshStateFilterOptions() {
+    var states = getDistinctStates();
+    if (!states.length) {
+      els.stateFilter.hidden = true;
+      return;
+    }
+    var prevValue = els.stateFilter.value;
+    els.stateFilter.innerHTML = '';
+    var optAll = document.createElement('option');
+    optAll.value = 'all';
+    optAll.textContent = 'All States';
+    els.stateFilter.appendChild(optAll);
+    states.forEach(function (s) {
+      var opt = document.createElement('option');
+      opt.value = s.value;
+      opt.textContent = s.label;
+      els.stateFilter.appendChild(opt);
+    });
+    var stillValid = Array.prototype.some.call(els.stateFilter.options, function (o) { return o.value === prevValue; });
+    els.stateFilter.value = stillValid ? prevValue : 'all';
+    els.stateFilter.hidden = false;
   }
 
   function renderContact(c) {
@@ -230,6 +305,12 @@
     var name = document.createElement('div');
     name.className = 'contact-name';
     name.textContent = c.name;
+    if (c.state) {
+      var stateBadge = document.createElement('span');
+      stateBadge.className = 'contact-state';
+      stateBadge.textContent = c.state;
+      name.appendChild(stateBadge);
+    }
     main.appendChild(name);
 
     if (c.phone) {
@@ -339,6 +420,7 @@
       saveMeta({ importedAt: new Date().toISOString(), fileName: file.name, count: imported.length });
       els.searchInput.value = '';
       els.statusFilter.value = 'all';
+      refreshStateFilterOptions();
       render();
       showToast('Imported ' + imported.length + ' contact' + (imported.length === 1 ? '' : 's') + '.');
     };
@@ -351,12 +433,13 @@
   // ---------- Export ----------
   function exportCSV() {
     if (!contacts.length) return;
-    var header = ['Name', 'Phone', 'Status', 'Notes', 'Called At'];
+    var header = ['Name', 'Phone', 'State', 'Status', 'Notes', 'Called At'];
     var lines = [header.map(csvField).join(',')];
     contacts.forEach(function (c) {
       lines.push([
         csvField(c.name),
         csvField(c.phone),
+        csvField(c.state || ''),
         csvField(STATUS_LABEL[c.status] || ''),
         csvField(c.notes || ''),
         csvField(c.calledAt || '')
@@ -439,12 +522,14 @@
   els.exportBtn.addEventListener('click', exportCSV);
   els.searchInput.addEventListener('input', render);
   els.statusFilter.addEventListener('change', render);
+  els.stateFilter.addEventListener('change', render);
   els.clearListBtn.addEventListener('click', function () {
     var ok = window.confirm('Clear the entire list from this device? This cannot be undone (export first if you need a copy).');
     if (!ok) return;
     contacts = [];
     saveContacts();
     saveMeta(null);
+    refreshStateFilterOptions();
     render();
     showToast('List cleared.');
   });
@@ -458,6 +543,7 @@
 
   // ---------- Init ----------
   loadContacts();
+  refreshStateFilterOptions();
   render();
   setupInstallBanner();
 })();

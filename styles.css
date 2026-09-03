@@ -19,6 +19,10 @@
   --c-wrong-number-bg: #fbe7e6;
   --c-callback: #a15c00;
   --c-callback-bg: #fbeed9;
+  --c-appointment: #0e7490;
+  --c-appointment-bg: #e0f2fe;
+  --c-referral: #7c3aed;
+  --c-referral-bg: #f1e9fd;
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -45,6 +49,10 @@
     --c-wrong-number-bg: #43201d;
     --c-callback: #f0bd6c;
     --c-callback-bg: #402c0f;
+    --c-appointment: #67d9f0;
+    --c-appointment-bg: #113a44;
+    --c-referral: #c9a6fb;
+    --c-referral-bg: #362350;
   }
 }
 
@@ -197,12 +205,13 @@ a { color: var(--primary); }
 
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 12px 16px 8px;
 }
 
 .toolbar input[type="search"] {
-  flex: 1;
+  flex: 1 1 100%;
   min-width: 0;
   padding: 10px 12px;
   border-radius: 10px;
@@ -211,11 +220,12 @@ a { color: var(--primary); }
 }
 
 .toolbar select {
+  flex: 1 1 auto;
+  min-width: 0;
   padding: 10px 8px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--surface);
-  max-width: 44%;
 }
 
 .progress-bar-wrap {
@@ -268,6 +278,8 @@ a { color: var(--primary); }
 .contact[data-status="no-answer"] { border-left-color: var(--c-no-answer); }
 .contact[data-status="wrong-number"] { border-left-color: var(--c-wrong-number); }
 .contact[data-status="callback"] { border-left-color: var(--c-callback); }
+.contact[data-status="appointment"] { border-left-color: var(--c-appointment); }
+.contact[data-status="referral"] { border-left-color: var(--c-referral); }
 
 .contact-main {
   display: flex;
@@ -280,6 +292,27 @@ a { color: var(--primary); }
 .contact-name {
   font-weight: 600;
   font-size: 1.02rem;
+}
+
+.contact-state {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-left: 6px;
+}
+
+.state-group-header {
+  list-style: none;
+  padding: 10px 4px 2px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.state-group-header:first-child {
+  padding-top: 2px;
 }
 
 .contact-phone {
@@ -313,6 +346,8 @@ a { color: var(--primary); }
 .status-chip[data-status="no-answer"].active { background: var(--c-no-answer-bg); color: var(--c-no-answer); border-color: var(--c-no-answer-bg); }
 .status-chip[data-status="wrong-number"].active { background: var(--c-wrong-number-bg); color: var(--c-wrong-number); border-color: var(--c-wrong-number-bg); }
 .status-chip[data-status="callback"].active { background: var(--c-callback-bg); color: var(--c-callback); border-color: var(--c-callback-bg); }
+.status-chip[data-status="appointment"].active { background: var(--c-appointment-bg); color: var(--c-appointment); border-color: var(--c-appointment-bg); }
+.status-chip[data-status="referral"].active { background: var(--c-referral-bg); color: var(--c-referral); border-color: var(--c-referral-bg); }
 
 .contact-footer {
   display: flex;
