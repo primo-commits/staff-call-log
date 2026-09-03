@@ -144,10 +144,28 @@
     return -1;
   }
 
+  var US_STATE_ABBR = {
+    AL: 1, AK: 1, AZ: 1, AR: 1, CA: 1, CO: 1, CT: 1, DE: 1, FL: 1, GA: 1,
+    HI: 1, ID: 1, IL: 1, IN: 1, IA: 1, KS: 1, KY: 1, LA: 1, ME: 1, MD: 1,
+    MA: 1, MI: 1, MN: 1, MS: 1, MO: 1, MT: 1, NE: 1, NV: 1, NH: 1, NJ: 1,
+    NM: 1, NY: 1, NC: 1, ND: 1, OH: 1, OK: 1, OR: 1, PA: 1, RI: 1, SC: 1,
+    SD: 1, TN: 1, TX: 1, UT: 1, VT: 1, VA: 1, WA: 1, WV: 1, WI: 1, WY: 1,
+    DC: 1, PR: 1
+  };
+
+  function extractStateFromAddress(address) {
+    if (!address) return '';
+    var zipMatch = address.match(/,\s*([A-Za-z]{2})\s+\d{5}(?:-\d{4})?\b/);
+    if (zipMatch && US_STATE_ABBR[zipMatch[1].toUpperCase()]) return zipMatch[1].toUpperCase();
+    var trailingMatch = address.match(/,\s*([A-Za-z]{2})\s*$/);
+    if (trailingMatch && US_STATE_ABBR[trailingMatch[1].toUpperCase()]) return trailingMatch[1].toUpperCase();
+    return '';
+  }
+
   function buildContactsFromRows(rows) {
     if (!rows.length) return [];
     var startIdx = 0;
-    var nameIdx = 0, phoneIdx = 1, statusIdx = -1, notesIdx = -1, stateIdx = -1;
+    var nameIdx = 0, phoneIdx = 1, statusIdx = -1, notesIdx = -1, stateIdx = -1, addressIdx = -1;
 
     var header = rows[0].map(function (h) { return String(h).trim().toLowerCase(); });
     var looksLikeHeader = header.some(function (h) {
@@ -161,6 +179,7 @@
       statusIdx = findColumnIndex(header, ['status', 'outcome', 'result']);
       notesIdx = findColumnIndex(header, ['note']);
       stateIdx = findStateColumnIndex(header);
+      addressIdx = findColumnIndex(header, ['address', 'location']);
       if (ni !== -1) nameIdx = ni;
       if (pi !== -1) phoneIdx = pi;
     }
@@ -175,6 +194,9 @@
       var status = statusIdx !== -1 ? normalizeStatus(r[statusIdx]) : '';
       var notes = notesIdx !== -1 ? (r[notesIdx] || '').trim() : '';
       var state = stateIdx !== -1 ? (r[stateIdx] || '').trim() : '';
+      if (!state && addressIdx !== -1) {
+        state = extractStateFromAddress((r[addressIdx] || '').trim());
+      }
       out.push({
         id: makeId(),
         name: name || '(no name)',
