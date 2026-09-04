@@ -25,6 +25,8 @@
   --c-referral-bg: #f1e9fd;
   --c-signed: #0f7a3d;
   --c-signed-bg: #dcf5e5;
+  --c-not-interested: #6b7280;
+  --c-not-interested-bg: #e8e9eb;
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -57,6 +59,8 @@
     --c-referral-bg: #362350;
     --c-signed: #6bd18a;
     --c-signed-bg: #143423;
+    --c-not-interested: #a3a9b0;
+    --c-not-interested-bg: #2a2e33;
   }
 }
 
@@ -350,6 +354,8 @@ a { color: var(--primary); }
 .contact[data-status="callback"] { border-left-color: var(--c-callback); }
 .contact[data-status="appointment"] { border-left-color: var(--c-appointment); }
 .contact[data-status="referral"] { border-left-color: var(--c-referral); }
+.contact[data-status="signed"] { border-left-color: var(--c-signed); }
+.contact[data-status="not-interested"] { border-left-color: var(--c-not-interested); }
 
 .contact-main {
   display: flex;
@@ -385,6 +391,7 @@ a { color: var(--primary); }
 .status-pill[data-status="appointment"] { background: var(--c-appointment-bg); color: var(--c-appointment); }
 .status-pill[data-status="referral"] { background: var(--c-referral-bg); color: var(--c-referral); }
 .status-pill[data-status="signed"] { background: var(--c-signed-bg); color: var(--c-signed); }
+.status-pill[data-status="not-interested"] { background: var(--c-not-interested-bg); color: var(--c-not-interested); }
 
 .contact-location {
   font-size: 0.85rem;
@@ -485,6 +492,8 @@ a { color: var(--primary); }
 .status-chip[data-status="callback"].active { background: var(--c-callback-bg); color: var(--c-callback); border-color: var(--c-callback-bg); }
 .status-chip[data-status="appointment"].active { background: var(--c-appointment-bg); color: var(--c-appointment); border-color: var(--c-appointment-bg); }
 .status-chip[data-status="referral"].active { background: var(--c-referral-bg); color: var(--c-referral); border-color: var(--c-referral-bg); }
+.status-chip[data-status="signed"].active { background: var(--c-signed-bg); color: var(--c-signed); border-color: var(--c-signed-bg); }
+.status-chip[data-status="not-interested"].active { background: var(--c-not-interested-bg); color: var(--c-not-interested); border-color: var(--c-not-interested-bg); }
 
 .called-at {
   display: block;

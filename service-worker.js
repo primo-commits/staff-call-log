@@ -1,4 +1,4 @@
-var CACHE_NAME = 'staff-call-log-v4';
+var CACHE_NAME = 'staff-call-log-v5';
 var APP_SHELL = [
   './',
   './index.html',

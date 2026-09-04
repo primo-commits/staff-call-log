@@ -10,6 +10,7 @@
     { key: 'appointment', label: 'Appointment Booked' },
     { key: 'signed', label: 'Signed' },
     { key: 'referral', label: 'Referral Sent' },
+    { key: 'not-interested', label: 'Not Interested' },
     { key: 'voicemail', label: 'Voicemail' },
     { key: 'no-answer', label: 'No Answer' },
     { key: 'wrong-number', label: 'Wrong Number' },
